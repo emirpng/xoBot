@@ -1,3 +1,4 @@
+import asyncio
 from typing import Dict, Tuple
 
 from pyrogram import Client, filters
@@ -6,6 +7,7 @@ from pyrogram.raw.types.messages import BotResults
 from pyrogram.types import Message
 
 import config
+from master import get_ai_move
 from utils import parse_message, extract_game
 
 app = Client(
@@ -47,6 +49,7 @@ async def send_game(_, message: Message):
         await message.edit_text('Timeout error')
 
 
+@app.on_edited_message(filters.me & filters.via_bot)
 async def play_game(_, message: Message):
     key = f'{message.chat.id}|{message.id}'
     if key not in GAMES:
@@ -55,7 +58,16 @@ async def play_game(_, message: Message):
     if message.via_bot.id == config.XO_BOT and message.reply_markup is not None:
         # Extract game from inline keyboard
         game = extract_game(message)
-        print(game)
+        if game is not None:
+            bot, opponent = GAMES[key]
+            b_count, o_count = game.count(bot), game.count(opponent)
+
+            # Is that bot's turn?
+            if (bot == 'X' and b_count == o_count) or (bot == 'O' and b_count < o_count):
+                best_move = get_ai_move(game, bot, bot)[0]
+                x, y = best_move % 3, best_move // 3
+                await asyncio.sleep(1)
+                await message.click(x, y)
 
 
 if __name__ == '__main__':
